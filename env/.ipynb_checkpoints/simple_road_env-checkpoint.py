@@ -59,19 +59,11 @@ better than through penalizing them in the reward function
  -- - -- put a mask on the Q-value associated with the left action such that it is never selected in such a state (if
 already at max left).
  -- v --  if the ego car is driving at the maximum speed then the accelerate action is masked
-
-To do:
-- selecting the final trajectory
-
-The RL is in RL_brain.py.
 """
 
 import time
 import numpy as np  # but trying to avoid using it (np.array cannot be converted to JSON)
-# import sys
-# if sys.version_info.major == 2:
-#     import Tkinter as tk
-# else:
+import sys
 import tkinter as tk
 from utils.logger import Logger
 
@@ -609,7 +601,6 @@ if __name__ == '__main__':
     # Wait 100 ms and run several episodes
     if flag_tkinter:
         env.after(100, demo, actions_list, nb_episodes)
-        env.mainloop()  # need to be close manually
+        env.mainloop()  # need to be closed manually
     else:
         demo(actions_list, nb_episodes)
-
