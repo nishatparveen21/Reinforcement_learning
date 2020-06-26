@@ -5,5 +5,5 @@
     - An agent that performs random actions in the environment (1) 
     - An agent that learns based on the environment (1)
 - List of ideas to finish project (1):
-    - Tried Q-learning
-    - Next plan is to try Deep Q-Network
+    - Tried Dynamic Programming and Q-learning
+    - In future, the plan is to try Deep Q-Network
