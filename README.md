@@ -5,7 +5,7 @@ To understand how Reinforcement Learning is being used to make autonomous drivin
 
 ## Simple_road environment
 A very basic scenario, but useful to apply and understand RL concepts.
-The envrionment is designed similarly to [openai gym](https://github.com/openai/gym) [`env`](https://gym.openai.com/envs/#classic_control)
+The environment is designed similarly to [openai gym](https://github.com/openai/gym) [`env`](https://gym.openai.com/envs/#classic_control)
 
 ### Dependencies
 
