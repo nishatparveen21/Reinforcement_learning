@@ -1,4 +1,11 @@
-def train_agent(using_tkinter, agent, method, gamma, learning_rate, eps_start, eps_end, eps_decay,
+import os
+import numpy as np
+import math
+import time
+from collections import deque
+
+
+def train_agent(env, using_tkinter, agent, method, gamma, learning_rate, eps_start, eps_end, eps_decay,
                 window_success, threshold_success, returns_list, steps_counter_list, info_training,
                 max_nb_episodes, max_nb_steps, sleep_time, folder_name=""):
     """
@@ -63,118 +70,41 @@ def train_agent(using_tkinter, agent, method, gamma, learning_rate, eps_start, e
         # reset the environment for a new episode
         current_observation, masked_actions_list = env.reset()  # initial observation = initial state
 
-        # for sarsa - agent selects next action based on observation
-        if (method == "sarsa") or (method == "sarsa_lambda"):
+        # run episodes
+        for step_id in range(max_nb_steps):
+            # ToDo: how to penalize the agent that does not terminate the episode?
+
+            # fresh env
+            if using_tkinter:
+                env.render(sleep_time)
+
             current_action = agent.choose_action(current_observation, masked_actions_list, greedy_epsilon)
-            if method == "sarsa_lambda":
-                # for sarsa_lambda - initial all zero eligibility trace
-                agent.reset_eligibility_trace()
+            next_observation, reward, termination_flag, masked_actions_list = env.step(current_action)
+            return_of_episode += reward
 
-        if method_used == "mc_control":
-            # generate an episode by following epsilon-greedy policy
-            episode = []
-            current_observation, _ = env.reset()
-            for step_id in range(max_nb_steps):  # while True
-                current_action = agent.choose_action(tuple(current_observation), masked_actions_list, greedy_epsilon)
-                next_observation, reward, termination_flag, masked_actions_list = env.step(current_action)
-                return_of_episode += reward
+            agent.learn(current_observation, current_action, reward, next_observation, termination_flag,
+                            gamma, learning_rate)
 
-                # a tuple is hashable and can be used in defaultdict
-                episode.append((tuple(current_observation), current_action, reward))
-                current_observation = next_observation
+            current_observation = next_observation
 
-                if termination_flag:
-                    step_counter = step_id
-                    steps_counter_list.append(step_id)
-                    returns_list.append(return_of_episode)
-                    break
+            if termination_flag:  # if done
+                step_counter = step_id
+                steps_counter_list.append(step_id)
+                returns_list.append(return_of_episode)
+                # agent.compare_reference_value()
 
-            # update the action-value function estimate using the episode
-            # print("episode = {}".format(episode))
-            # agent.compare_reference_value()
-            agent.learn(episode, gamma, learning_rate)
+                break
 
-        else:  # TD
-            # run episodes
-            for step_id in range(max_nb_steps):
-                # ToDo: how to penalize the agent that does not terminate the episode?
+            # log
+            trajectory.append(current_observation)
+            trajectory.append(current_action)
 
-                # fresh env
-                if using_tkinter:
-                    env.render(sleep_time)
-
-                if (method == "sarsa") or (method == "sarsa_lambda"):
-                    next_observation, reward, termination_flag, masked_actions_list = env.step(current_action)
-                    return_of_episode += reward
-                    if not termination_flag:  # if done
-                        # Online-Policy: Choose an action At+1 following the same e-greedy policy based on current Q
-                        # ToDo: here, we should read the masked_actions_list associated to the next_observation
-                        masked_actions_list = env.masking_function(next_observation)
-                        next_action = agent.choose_action(next_observation, masked_actions_list=masked_actions_list,
-                                                          greedy_epsilon=greedy_epsilon)
-
-                        # agent learn from this transition
-                        agent.learn(current_observation, current_action, reward, next_observation, next_action,
-                                    termination_flag, gamma, learning_rate)
-                        current_observation = next_observation
-                        current_action = next_action
-
-                    if termination_flag:  # if done
-                        agent.learn(current_observation, current_action, reward, next_observation, next_action,
-                                    termination_flag, gamma, learning_rate)
-                        # ToDo: check it ignore next_observation and next_action
-                        step_counter = step_id
-                        steps_counter_list.append(step_id)
-                        returns_list.append(return_of_episode)
-                        break
-
-                elif (method == "q") or (method == "expected_sarsa") or (method == "simple_dqn_pytorch"):
-                    current_action = agent.choose_action(current_observation, masked_actions_list, greedy_epsilon)
-                    next_observation, reward, termination_flag, masked_actions_list = env.step(current_action)
-                    return_of_episode += reward
-
-                    if method == "q":
-                        # agent learn from this transition
-                        agent.learn(current_observation, current_action, reward, next_observation, termination_flag,
-                                    gamma, learning_rate)
-
-                    elif method == "simple_dqn_pytorch":
-                        agent.step(current_observation, current_action, reward, next_observation, termination_flag)
-
-                    elif method == "expected_sarsa":
-                        agent.learn(current_observation, current_action, reward, next_observation, termination_flag,
-                                    greedy_epsilon, gamma, learning_rate)
-
-                    else:  # DQN with tensorflow
-                        # New: store transition in memory - subsequently to be sampled from
-                        agent.store_transition(current_observation, current_action, reward, next_observation)
-
-                        # if the number of steps is larger than a threshold, start learn ()
-                        if (step_id > 5) and (step_id % 5 == 0):  # for 1 to T
-                            # print('learning')
-                            # pick up some transitions from the memory and learn from these samples
-                            agent.learn()
-
-                    current_observation = next_observation
-
-                    if termination_flag:  # if done
-                        step_counter = step_id
-                        steps_counter_list.append(step_id)
-                        returns_list.append(return_of_episode)
-                        # agent.compare_reference_value()
-
-                        break
-
-                # log
-                trajectory.append(current_observation)
-                trajectory.append(current_action)
-
-                # monitor actions, states and rewards are not constant
-                rewards.append(reward)
-                actions.append(current_action)
-                if not (next_observation[0] == current_observation[0]
-                        and next_observation[1] == current_observation[1]):
-                    changes_in_state = changes_in_state + 1
+            # monitor actions, states and rewards are not constant
+            rewards.append(reward)
+            actions.append(current_action)
+            if not (next_observation[0] == current_observation[0]
+                    and next_observation[1] == current_observation[1]):
+                changes_in_state = changes_in_state + 1
 
         # At this point, the episode is terminated
         # decay epsilon
@@ -222,8 +152,7 @@ def train_agent(using_tkinter, agent, method, gamma, learning_rate, eps_start, e
     info_training["reference_values"] = agent.compare_reference_value()
 
     # where to save the weights
-#     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    folder = os.path.join(parent_dir, "results/simple_road/" + folder_name)
+    folder = os.path.join("results_qlearning/" + folder_name)
     if not os.path.exists(folder):
         os.makedirs(folder)
     agent.save_q_table(folder)
@@ -237,65 +166,3 @@ def train_agent(using_tkinter, agent, method, gamma, learning_rate, eps_start, e
         env.destroy()
 
     # return returns_list, steps_counter_list
-
-def test_agent(using_tkinter_test, agent, returns_list, nb_episodes=1, max_nb_steps=20, sleep_time=0.001,
-               weight_file_name="q_table.pkl"):
-    """
-    load weights and show one run
-    :param using_tkinter_test: [bool]
-    :param agent: [brain object]
-    :param returns_list: [float list] - argument passed by reference
-    :param nb_episodes: [int]
-    :param max_nb_steps: [int]
-    :param sleep_time: [float]
-    :param weight_file_name: [string]
-    :return: -
-    """
-    grand_parent_dir_test = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    weight_file = os.path.abspath(grand_parent_dir_test + "/results/simple_road/" + weight_file_name)
-    if agent.load_q_table(weight_file):
-
-        for episode_id in range(nb_episodes):
-            trajectory = []
-            # reset the environment for a new episode
-            current_observation, masked_actions_list = env.reset()  # initial observation = initial state
-            print("{} = initial_observation".format(current_observation))
-            score = 0  # initialize the score
-            step_id = 0
-            while step_id < max_nb_steps:
-                step_id += 1
-                # fresh env
-                if using_tkinter_test:
-                    env.render(sleep_time)
-
-                # agent choose current_action based on observation
-                greedy_epsilon = 0
-                current_action = agent.choose_action(current_observation, masked_actions_list, greedy_epsilon)
-
-                next_observation, reward, termination_flag, masked_actions_list = env.step(current_action)
-
-                score += reward  # update the score
-
-                trajectory.append(current_observation)
-                trajectory.append(current_action)
-                trajectory.append(reward)
-                trajectory.append(termination_flag)
-
-                # update state
-                current_observation = next_observation
-                print("\r {}, {}, {}.".format(current_action, reward, termination_flag), end="")
-                sys.stdout.flush()
-                if termination_flag:  # exit loop if episode finished
-                    trajectory.append(next_observation)
-                    break
-
-            returns_list.append(score)
-            print("\n{}/{} - Return: {}".format(episode_id, nb_episodes, score))
-            print("\nTrajectory = {}".format(trajectory))
-            # Best trajectory= [[0, 3], 'no_change', [3, 3], 'no_change', [6, 3], 'no_change', [9, 3], 'slow_down',
-            # [11, 2], 'no_change', [13, 2], 'speed_up', [16, 3], 'no_change', [19, 3]]
-
-        print("---")
-        print("{} = average return".format(np.mean(returns_list)))
-    else:
-        print("cannot load weight_file at {}".format(weight_file))
